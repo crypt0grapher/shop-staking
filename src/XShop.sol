@@ -75,23 +75,23 @@ contract XShop is ERC20, Ownable, ReentrancyGuard {
 
     // ========== State changing ==========
 
-    function deposit(uint256 amount) public nonReentrant {
-        require(amount + balanceOf(msg.sender) > minimumStake, "Amount must be greater than 20K $SHOP");
-        require(shopToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+    function deposit(uint256 _amount) public nonReentrant {
+        require(_amount + balanceOf(msg.sender) > minimumStake, "Amount must be greater than 20K $SHOP");
+        require(shopToken.transferFrom(msg.sender, address(this), _amount), "Transfer failed");
 
-        _updateStake(msg.sender, amount, true);
+        _updateStake(msg.sender, _amount, true);
 
-        emit Deposited(msg.sender, amount);
+        emit Deposited(msg.sender, _amount);
     }
 
-    function withdraw(uint256 amount) public nonReentrant {
-        require(balanceOf(msg.sender) >= amount, "Insufficient balance");
+    function withdraw(uint256 _amount) public nonReentrant {
+        require(balanceOf(msg.sender) >= _amount, "Insufficient balance");
 
-        _updateStake(msg.sender, amount, false);
+        _updateStake(msg.sender, _amount, false);
 
-        require(shopToken.transfer(msg.sender, amount), "Transfer failed");
+        require(shopToken.transfer(msg.sender, _amount), "Transfer failed");
 
-        emit Withdrawn(msg.sender, amount);
+        emit Withdrawn(msg.sender, _amount);
     }
 
     function claimReward() public nonReentrant {
@@ -109,7 +109,7 @@ contract XShop is ERC20, Ownable, ReentrancyGuard {
         emit Claimed(msg.sender, reward);
     }
 
-    function snapshot() public payable nonReentrant {
+    function snapshot() public payable {
         uint256 lastSnapshotTime = epochInfo[currentEpoch - 1].timestamp;
         require(block.timestamp >= lastSnapshotTime + epochDuration - 5 minutes, "Too early for a new snapshot");
         require(msg.value > 0, "ETH amount must be greater than 0");
@@ -121,7 +121,7 @@ contract XShop is ERC20, Ownable, ReentrancyGuard {
 
         uint256 ethToSell = 0;
         for (uint256 i = 1; i <= reInvestorsCount; i++) {
-            ethToSell += _calculateRewardToReinvest(reInvestors[i]);
+            ethToSell += _calculateReward(reInvestors[i], userInfo[(reInvestors[i])].lastEpochReinvested, true);
             if (ethToSell > 0) {
                 userInfo[reInvestors[i]].lastEpochReinvested = currentEpoch;
             }
@@ -166,12 +166,12 @@ contract XShop is ERC20, Ownable, ReentrancyGuard {
     }
 
 
-    function rescueETH(uint256 weiAmount) external {
-        payable(owner()).transfer(weiAmount);
+    function rescueETH(uint256 _weiAmount) external {
+        payable(owner()).transfer(_weiAmount);
     }
 
-    function rescueERC20(address tokenAdd, uint256 amount) external {
-        IERC20(tokenAdd).transfer(owner(), amount);
+    function rescueERC20(address _tokenAdd, uint256 _amount) external {
+        IERC20(_tokenAdd).transfer(owner(), _amount);
     }
 
     // ========== View functions ==========
@@ -181,19 +181,7 @@ contract XShop is ERC20, Ownable, ReentrancyGuard {
     }
 
     function calculateRewardForUser(address user) public view returns (uint256) {
-        uint256 reward = 0;
-        if (currentEpoch == 0) {
-            return 0;
-        }
-        uint256 userBalanceInEpoch = balanceOf(user);
-        for (uint256 i = currentEpoch - 1; i >= userInfo[user].lastClaimedEpoch; i--) {
-            userBalanceInEpoch -= userInfo[user].depositedInEpoch[i];
-            if (reInvestorsIndex[msg.sender] == 0) {
-                uint256 epochReward = userBalanceInEpoch * epochInfo[i].rewards / epochInfo[i].supply;
-                reward += epochReward;
-            }
-        }
-        return reward;
+        return _calculateReward(user, userInfo[user].lastClaimedEpoch, false);
     }
 
     function isReinvesting() public view returns (bool) {
@@ -202,38 +190,38 @@ contract XShop is ERC20, Ownable, ReentrancyGuard {
 
     // ========== Internal functions ==========
 
-    function _updateStake(address user, uint256 amount, bool isDeposit) internal {
-        if (isDeposit) {
-            userInfo[user].depositedInEpoch[currentEpoch] += amount;
-            _mint(user, amount);
+    function _updateStake(address _user, uint256 _amount, bool _isDeposit) internal {
+        if (_isDeposit) {
+            userInfo[_user].depositedInEpoch[currentEpoch] += _amount;
+            _mint(_user, _amount);
         } else {
-            uint256 remainingAmountToWithdraw = amount;
+            uint256 remainingAmountToWithdraw = _amount;
             for (uint256 i = 0; i <= currentEpoch; i++) {
                 if (remainingAmountToWithdraw == 0) {
                     break;
                 }
-                uint256 amountToWithdraw = userInfo[user].depositedInEpoch[i];
+                uint256 amountToWithdraw = userInfo[_user].depositedInEpoch[i];
                 if (amountToWithdraw > remainingAmountToWithdraw) {
                     amountToWithdraw = remainingAmountToWithdraw;
                 }
-                userInfo[user].depositedInEpoch[i] -= amountToWithdraw;
+                userInfo[_user].depositedInEpoch[i] -= amountToWithdraw;
                 remainingAmountToWithdraw -= amountToWithdraw;
             }
-            _burn(user, amount);
+            _burn(_user, _amount);
         }
     }
 
 
-    function _swapEthForShop(uint256 ethAmount) private returns (uint256) {
-        // Generate the Uniswap pair path of WETH -> SHOP
+    function _swapEthForShop(uint256 _ethAmount) internal returns (uint256) {
         address[] memory path = new address[](2);
         path[0] = uniswapRouter.WETH();
         path[1] = address(shopToken);
 
-        uint256 deadline = block.timestamp + 15; // 15 seconds from the current block time
+        // 15 seeconds from the current block time
+        uint256 deadline = block.timestamp + 15;
 
         // Swap and return the amount of SHOP tokens received
-        uint[] memory amounts = uniswapRouter.swapExactETHForTokens{value: ethAmount}(
+        uint[] memory amounts = uniswapRouter.swapExactETHForTokens{value: _ethAmount}(
             0, // Accept any amount of SHOP
             path,
             address(this),
@@ -245,25 +233,31 @@ contract XShop is ERC20, Ownable, ReentrancyGuard {
     }
 
 // Mock function for demonstration purposes. In reality, you'd interact with a decentralized exchange contract here.
-    function _calculateRewardToReinvest(address user) private view returns (uint256) {
+    function _calculateReward(address _user, uint256 _lastEpoch, bool _isForReinvestment) internal view returns (uint256) {
         uint256 reward = 0;
         if (currentEpoch == 0) {
             return 0;
         }
-        uint256 userBalanceInEpoch = balanceOf(user);
-        for (uint256 i = currentEpoch - 1; i >= userInfo[user].lastEpochReinvested; i--) {
-            userBalanceInEpoch -= userInfo[user].depositedInEpoch[i];
-            if (reInvestorsIndex[msg.sender] > 0) {
-                uint256 rewardsToReinvest = userBalanceInEpoch * epochInfo[i].rewards / epochInfo[i].supply;
-                reward += rewardsToReinvest;
+
+        uint256 userBalanceInEpoch = balanceOf(_user);
+
+        for (uint256 i = currentEpoch - 1; i >= _lastEpoch; i--) {
+            userBalanceInEpoch -= userInfo[_user].depositedInEpoch[i];
+            uint256 epochReward = userBalanceInEpoch * epochInfo[i].rewards / epochInfo[i].supply;
+
+            if (_isForReinvestment && reInvestorsIndex[_user] > 0) {
+                reward += epochReward;
+            } else if (!_isForReinvestment && reInvestorsIndex[_user] == 0) {
+                reward += epochReward;
             }
         }
+
         return reward;
     }
 
-    function _beforeTokenTransfer(address from, address to, uint256 amount) internal override {
-        super._beforeTokenTransfer(from, to, amount);
-        require(from == address(0) || to == address(0), "Only stake or unstake");
+    function _beforeTokenTransfer(address _from, address _to, uint256 _amount) internal override {
+        super._beforeTokenTransfer(_from, _to, _amount);
+        require(_from == address(0) || _to == address(0), "Only stake or unstake");
     }
 
 
