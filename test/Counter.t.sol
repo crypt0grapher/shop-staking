@@ -2,10 +2,10 @@
 pragma solidity ^0.8.21;
 
 import "forge-std/Test.sol";
-import "../src/Counter.sol";
+import "../src/XShop.sol";
 
-contract CounterTest is Test {
-    Counter public counter;
+contract XShopTest is Test {
+    XShop public StakedShop;
 
     function setUp() public {
         counter = new Counter();
