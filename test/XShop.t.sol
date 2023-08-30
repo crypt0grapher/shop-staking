@@ -5,10 +5,10 @@ import "forge-std/Test.sol";
 import "../src/XShop.sol";
 
 contract XShopTest is Test {
-    XSHOP public xshop;
+    XShop public xshop;
 
     function setUp() public {
-        xshop = new XSHOP();
+        xshop = new XShop();
     }
 
 }
