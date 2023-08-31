@@ -36,6 +36,9 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
         uint256 supply;
         // $SHOP swapped for rewards for re-investors
         uint256 shop;
+        // This is used for aligning with the user deposits/withdrawals during epoch to adjust totalsupply
+        uint256 deposited;
+        uint256 withdrawn;
     }
 
     uint256 public currentEpoch;
@@ -138,7 +141,7 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
         }
         uint256 xShopToMintTotal = 0;
         if (ethToSell > 0) {
-            uint256 xShopToMintTotal = _swapEthForShop(ethToSell);
+            xShopToMintTotal = _swapEthForShop(ethToSell);
             epochInfo[currentEpoch].shop = xShopToMintTotal;
         }
         console.log("epochInfo[currentEpoch].shop ", epochInfo[currentEpoch].shop);
@@ -206,20 +209,11 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
     function _updateStake(address _user, uint256 _amount, bool _isDeposit) internal {
         if (_isDeposit) {
             userInfo[_user].depositedInEpoch[currentEpoch] += _amount;
+            epochInfo[currentEpoch].deposited += _amount;
             _mint(_user, _amount);
         } else {
-            uint256 remainingAmountToWithdraw = _amount;
-            for (uint256 i = 0; i <= currentEpoch; i++) {
-                if (remainingAmountToWithdraw == 0) {
-                    break;
-                }
-                uint256 amountToWithdraw = userInfo[_user].depositedInEpoch[i];
-                if (amountToWithdraw > remainingAmountToWithdraw) {
-                    amountToWithdraw = remainingAmountToWithdraw;
-                }
-                userInfo[_user].depositedInEpoch[i] -= amountToWithdraw;
-                remainingAmountToWithdraw -= amountToWithdraw;
-            }
+            userInfo[_user].withdrawnInEpoch[currentEpoch] += _amount;
+            epochInfo[currentEpoch].withdrawn += _amount;
             _burn(_user, _amount);
         }
     }
@@ -253,21 +247,20 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
         if (currentEpoch < 1) {
             return 0;
         }
-
         uint256 userBalanceInEpoch = balanceOf(_user);
-        uint256 supplyInEpoch = totalSupply();
         console.log("userBalanceInEpoch initial ", userBalanceInEpoch);
         console.log("looping, userBalanceInEpoch initial ", userBalanceInEpoch);
         uint256 i = currentEpoch;
         while (i >= _lastEpoch && i <= currentEpoch) {
+            uint256 supplyInEpoch = epochInfo[i-1].supply;
             console.log("> user: %s, epoch: %s", _user, i);
             console.log("userInfo[_user].depositedInEpoch[i] ", userInfo[_user].depositedInEpoch[i]);
             userBalanceInEpoch -= userInfo[_user].depositedInEpoch[i];
-            supplyInEpoch -= userInfo[_user].depositedInEpoch[i];
+            userBalanceInEpoch += userInfo[_user].withdrawnInEpoch[i];
             console.log("userBalanceInEpoch ", userBalanceInEpoch);
             console.log("supplyInEpoch ", supplyInEpoch);
             console.log("epochInfo[i].rewards ", epochInfo[i].rewards);
-            uint256 epochReward = epochInfo[i].supply == 0 || i == currentEpoch ? 0 :
+            uint256 epochReward = supplyInEpoch == 0 || i == currentEpoch ? 0 :
                 userBalanceInEpoch * epochInfo[i].rewards / supplyInEpoch;
             console.log("epochReward ", epochReward);
             if (epochReward > 0) {
@@ -278,7 +271,7 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
                 }
             }
             console.log("reward: ", reward);
-            if (i == 0) {
+            if (i == 1) {
                 break;
             }
             i--;
