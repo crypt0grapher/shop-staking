@@ -63,13 +63,38 @@ contract XShopTest is Test {
     function testSnapshot() public payable {
         // Create a snapshot with some eth
         xshop.snapshot{value: 1 ether}();
+        // Validate the snapshot
+        (uint256 timestamp, uint256 rewards,  uint256 supply, uint256 shop) = xshop.epochInfo(0);
+        //rewards
+        assert(rewards == 1 ether);
+        assert(supply == 0);
+        //timestamp
+        assert(timestamp > 0);
+    }
+
+    function testNextSnapshot() public payable {
+        // Create a snapshot with some eth
+        xshop.snapshot{value: 1 ether}();
 
         // Validate the snapshot
         (uint256 timestamp, uint256 rewards,  uint256 supply, uint256 shop) = xshop.epochInfo(0);
         //rewards
         assert(rewards == 1 ether);
+        assert(supply == 0);
         //timestamp
         assert(timestamp > 0);
+        skip(1 days);
+        xshop.snapshot{value: 2 ether}();
+
+    }
+
+    function testFailClaimRightAfterDeposit() public payable {
+        uint256 amount = 20000 * 10 ** 18;
+        xshop.deposit(amount);
+        // Create a snapshot with some eth
+        xshop.snapshot{value: 1 ether}();
+        // Validate the snapshot
+        xshop.claimReward();
     }
 
 }
