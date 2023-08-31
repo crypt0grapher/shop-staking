@@ -43,5 +43,4 @@ interface IXShop is IERC20 {
 
     // Current epoch ordinal number, starts from 0 and increases by 1 after each snapshot (by default every 24 hours)
     function currentEpoch() external view returns (uint256);
-
 }

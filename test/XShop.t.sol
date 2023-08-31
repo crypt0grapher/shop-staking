@@ -8,17 +8,17 @@ import "./ShopMock.sol";
 
 contract XShopTest is Test {
     XShop public xshop;
-    IERC20 public shopToken;
-    uint256 initialSupply = 10 ** 24; // 1 million tokens, 18 decimals
+    SHOP public shopToken;
+    uint256 initialSupply = 10 ** 23; // 100K tokens, 18 decimals
 
     function setUp() public {
         xshop = new XShop();
-        address _shopToken = address(new ShopMock("SHOP MOCK", "MOCK"));
+        shopToken = new SHOP();
         UniswapV2Mock router = new UniswapV2Mock(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40);
-        vm.etch(address(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40), _shopToken.code);
+        vm.etch(address(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40), address(shopToken).code);
         vm.etch(address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D), address(router).code);
-        ShopMock(_shopToken).mint(address(this), initialSupply);
-        shopToken = ERC20(_shopToken);
+        SHOP shop = SHOP(payable(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40));
+        shop.mint(address(this),initialSupply);
     }
 
     function testInitialization() public {
@@ -29,10 +29,11 @@ contract XShopTest is Test {
     }
 
     function testDeposit() public {
-        uint256 depositAmount = 25000 * 10 ** 18;
+        uint256 depositAmount = 25000 * 1e18;
+        SHOP shop = SHOP(payable(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40));
 
         // Approve XShop to transfer SHOP
-        shopToken.approve(address(xshop), depositAmount);
+        shop.approve(address(xshop), depositAmount);
 
         // Deposit into XShop
         xshop.deposit(depositAmount);
@@ -53,7 +54,6 @@ contract XShopTest is Test {
 
     function testToggleReinvesting() public {
         xshop.toggleReinvesting();
-
         // Check the status of reinvesting
         assert(xshop.isReinvesting() == true);
     }
