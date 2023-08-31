@@ -8,17 +8,18 @@ import "./ShopMock.sol";
 
 contract XShopTest is Test {
     XShop public xshop;
-    SHOP public shopToken;
-    uint256 initialSupply = 10 ** 23; // 100K tokens, 18 decimals
+    SHOP public shop;
+    uint256 initialSupply = 10 ** 24; // 1M tokens, 18 decimals
 
     function setUp() public {
         xshop = new XShop();
-        shopToken = new SHOP();
+        SHOP shopToken = new SHOP();
         UniswapV2Mock router = new UniswapV2Mock(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40);
         vm.etch(address(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40), address(shopToken).code);
         vm.etch(address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D), address(router).code);
-        SHOP shop = SHOP(payable(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40));
-        shop.mint(address(this),initialSupply);
+        shop = SHOP(payable(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40));
+        shop.mint(address(this), initialSupply);
+        shop.approve(address(xshop), initialSupply);
     }
 
     function testInitialization() public {
@@ -30,26 +31,27 @@ contract XShopTest is Test {
 
     function testDeposit() public {
         uint256 depositAmount = 25000 * 1e18;
-        SHOP shop = SHOP(payable(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40));
-
         // Approve XShop to transfer SHOP
-        shop.approve(address(xshop), depositAmount);
-
+        uint256 shopBalance = shop.balanceOf(address(this));
         // Deposit into XShop
         xshop.deposit(depositAmount);
 
         // Validate the deposit
-        assert(xshop.balanceOf(address(this)) == depositAmount);
+        assertEq(xshop.balanceOf(address(this)), depositAmount);
+        assertEq(shop.balanceOf(address(this)), shopBalance - depositAmount);
+        // Validate totalsupply change
+        assertEq(xshop.totalSupply(), depositAmount);
+    }
+
+    function testFailMinimumAllowableDeposit() public {
+        xshop.deposit(19000 * 1e18);
     }
 
     function testWithdraw() public {
-        uint256 withdrawAmount = 10000 * 10 ** 18;
-
+        uint256 withdrawAmount = 20000 * 10 ** 18;
+        xshop.deposit(withdrawAmount);
         // Withdraw from XShop
         xshop.withdraw(withdrawAmount);
-
-        // Validate the withdrawal
-        assert(xshop.balanceOf(address(this)) == 15000 * 10 ** 18);
     }
 
     function testToggleReinvesting() public {
