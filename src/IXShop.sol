@@ -3,11 +3,12 @@ pragma solidity ^0.8.21;
 import "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 interface IXShop is IERC20 {
-    event Snapshot(uint256 rewards, address indexed from, uint256 shopMinted);
+    event Snapshot(uint256 epoch, uint256 rewards, address indexed from);
+    event Swapped(uint256 eth, uint256 shop);
     event Deposited(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
     event Claimed(address indexed user, uint256 reward);
-    event ReinvestingToggled(address indexed user, bool status);
+    event Reinvestment(address indexed user, bool status);
 
     // ========== State Changing Functions ==========
     // Deposit (stake) SHOP tokens and get XSHOP tokens of the same amount in return
