@@ -53,6 +53,7 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
         // a starting epoch for reward calculation for user - either last claimed or first deposit
         uint256 lastClaimedEpoch;
         uint256 lastEpochReinvested;
+        uint256 firstDeposit;
     }
 
     mapping(address => UserInfo) public userInfo;
@@ -80,6 +81,9 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
         require(_amount + balanceOf(msg.sender) >= minimumStake, "Minimum deposit is 20K $SHOP");
         require(shopToken.transferFrom(msg.sender, address(this), _amount), "Transfer failed");
 
+        if (firstDeposit == 0) {
+            firstDeposit = block.timestamp;
+        }
         _updateStake(msg.sender, _amount, true);
 
         emit Deposited(msg.sender, _amount);
@@ -87,6 +91,7 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
 
     function withdraw(uint256 _amount) public nonReentrant {
         require(balanceOf(msg.sender) >= _amount, "Insufficient balance");
+        require(firstDeposit + timeLock < block.timestamp, "Too early to withdraw");
 
         _updateStake(msg.sender, _amount, false);
 
@@ -110,7 +115,8 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
         emit Claimed(msg.sender, reward);
     }
 
-    function snapshot() public payable nonReentrant {
+    // we need it to be only owner to keep epochs precise
+    function snapshot() public payable nonReentrant onlyOwner {
         console.log("snapshot()");
         uint256 lastSnapshotTime = 0;
         if (currentEpoch > 0) {

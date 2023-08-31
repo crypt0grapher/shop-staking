@@ -166,6 +166,7 @@ contract XShopTest is Test {
         skip(1 days);
         xshop.withdraw(20000 * 1e18);
         xshop.snapshot{value: 10 ether}();
+        skip(1 days);
 
         // epoch 3 started
         reward = xshop.getPendingReward();
@@ -180,8 +181,16 @@ contract XShopTest is Test {
         // epoch 0: 0.6 ether
         // epoch 1: 2 ether * 60/80 = 1.5 ether
         // epoch 2: last one
-
         assertEq(rewardUser1, 21 * 1e17);
+        uint256 balanceBefore = address(this).balance;
+        xshop.claimReward();
+        assertEq(address(this).balance - balanceBefore, reward);
+
+        vm.startPrank(user1);
+        balanceBefore = address(this).balance;
+        xshop.claimReward();
+        assertEq(address(this).balance - balanceBefore, rewardUser1);
+        vm.stopPrank();
 
         // Validate the snapshot
 //        uint256 currentEtherBalance = address(this).balance;
