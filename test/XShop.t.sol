@@ -72,6 +72,14 @@ contract XShopTest is Test {
         assert(timestamp > 0);
     }
 
+
+    function testFailNextSnapshotTooEarly() public payable {
+        // Create a snapshot with some eth
+        xshop.snapshot{value: 1 ether}();
+        skip(1 hours);
+        xshop.snapshot{value: 1 ether}();
+    }
+
     function testNextSnapshot() public payable {
         // Create a snapshot with some eth
         xshop.snapshot{value: 1 ether}();
@@ -85,7 +93,6 @@ contract XShopTest is Test {
         assert(timestamp > 0);
         skip(1 days);
         xshop.snapshot{value: 2 ether}();
-
     }
 
     function testFailClaimRightAfterDeposit() public payable {
@@ -96,5 +103,32 @@ contract XShopTest is Test {
         // Validate the snapshot
         xshop.claimReward();
     }
+
+    function testClaim() public payable {
+        // the only depositor gets it all
+        uint256 amount = 20000 * 10 ** 18;
+        // depositing in epoch 0
+        xshop.deposit(amount);
+        // Create a snapshot with some eth
+
+        skip(1 days);
+        // epoch 0
+        xshop.snapshot{value: 1 ether}();
+        uint256 reward = xshop.getPendingReward();
+        assertEq(reward, 0);
+
+        skip(1 days);
+        // epoch 1
+        xshop.snapshot{value: 2 ether}();
+
+        reward = xshop.getPendingReward();
+        // should be previous epoch fee in epoch 1
+        assertEq(reward, 1 ether);
+        // Validate the snapshot
+//        uint256 currentEtherBalance = address(this).balance;
+//        xshop.claimReward();
+//        assertEq(address(this).balance, currentEtherBalance + 1 ether);
+    }
+
 
 }

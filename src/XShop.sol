@@ -247,25 +247,29 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
 
 // Mock function for demonstration purposes. In reality, you'd interact with a decentralized exchange contract here.
     function _calculateReward(address _user, uint256 _lastEpoch, bool _isForReinvestment) internal view returns (uint256) {
-        console.log("start _calculateReward(), isForReinvestment ", _isForReinvestment);
+        console.log("start _calculateReward(), _lastEpoch, isForReinvestment ", _lastEpoch, _isForReinvestment);
         uint256 reward = 0;
         if (currentEpoch == 0) {
             return 0;
         }
 
         uint256 userBalanceInEpoch = balanceOf(_user);
+        console.log("userBalanceInEpoch initial ", userBalanceInEpoch);
         console.log("looping, userBalanceInEpoch initial ", userBalanceInEpoch);
-        for (uint256 i = currentEpoch - 1; i >= _lastEpoch; i--) {
+        for (uint256 i = currentEpoch; i > _lastEpoch; i--) {
             console.log("epoch: ", i);
             userBalanceInEpoch -= userInfo[_user].depositedInEpoch[i];
             console.log("userBalanceInEpoch ", userBalanceInEpoch);
-            uint256 epochReward = userBalanceInEpoch * epochInfo[i].rewards / epochInfo[i].supply;
+            console.log("epochInfo[i].supply ", epochInfo[i].supply);
+            console.log("epochInfo[i].rewards ", epochInfo[i].rewards);
+            uint256 epochReward = epochInfo[i].supply == 0 || i == currentEpoch ? 0 : userBalanceInEpoch * epochInfo[i - 1].rewards / epochInfo[i].supply;
             console.log("epochReward ", epochReward);
-
-            if (_isForReinvestment && reInvestorsIndex[_user] > 0) {
-                reward += epochReward;
-            } else if (!_isForReinvestment && reInvestorsIndex[_user] == 0) {
-                reward += epochReward;
+            if (epochReward > 0) {
+                if (_isForReinvestment && reInvestorsIndex[_user] > 0) {
+                    reward += epochReward;
+                } else if (!_isForReinvestment && reInvestorsIndex[_user] == 0) {
+                    reward += epochReward;
+                }
             }
             console.log("reward: ", reInvestorsIndex[_user]);
         }
