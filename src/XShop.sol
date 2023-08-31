@@ -45,6 +45,7 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
     struct UserInfo {
         //epoch => total amount deposited during the epoch
         mapping(uint256 => uint256) depositedInEpoch;
+        mapping(uint256 => uint256) withdrawnInEpoch;
         mapping(uint256 => bool) isReinvestingOnForEpoch;
         // a starting epoch for reward calculation for user - either last claimed or first deposit
         uint256 lastClaimedEpoch;
@@ -249,20 +250,25 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
     function _calculateReward(address _user, uint256 _lastEpoch, bool _isForReinvestment) internal view returns (uint256) {
         console.log("start _calculateReward(), _lastEpoch, isForReinvestment ", _lastEpoch, _isForReinvestment);
         uint256 reward = 0;
-        if (currentEpoch == 0) {
+        if (currentEpoch < 1) {
             return 0;
         }
 
         uint256 userBalanceInEpoch = balanceOf(_user);
+        uint256 supplyInEpoch = totalSupply();
         console.log("userBalanceInEpoch initial ", userBalanceInEpoch);
         console.log("looping, userBalanceInEpoch initial ", userBalanceInEpoch);
-        for (uint256 i = currentEpoch; i > _lastEpoch; i--) {
-            console.log("epoch: ", i);
+        uint256 i = currentEpoch;
+        while (i >= _lastEpoch && i <= currentEpoch) {
+            console.log("> user: %s, epoch: %s", _user, i);
+            console.log("userInfo[_user].depositedInEpoch[i] ", userInfo[_user].depositedInEpoch[i]);
             userBalanceInEpoch -= userInfo[_user].depositedInEpoch[i];
+            supplyInEpoch -= userInfo[_user].depositedInEpoch[i];
             console.log("userBalanceInEpoch ", userBalanceInEpoch);
-            console.log("epochInfo[i].supply ", epochInfo[i].supply);
+            console.log("supplyInEpoch ", supplyInEpoch);
             console.log("epochInfo[i].rewards ", epochInfo[i].rewards);
-            uint256 epochReward = epochInfo[i].supply == 0 || i == currentEpoch ? 0 : userBalanceInEpoch * epochInfo[i - 1].rewards / epochInfo[i].supply;
+            uint256 epochReward = epochInfo[i].supply == 0 || i == currentEpoch ? 0 :
+                userBalanceInEpoch * epochInfo[i].rewards / supplyInEpoch;
             console.log("epochReward ", epochReward);
             if (epochReward > 0) {
                 if (_isForReinvestment && reInvestorsIndex[_user] > 0) {
@@ -271,7 +277,11 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
                     reward += epochReward;
                 }
             }
-            console.log("reward: ", reInvestorsIndex[_user]);
+            console.log("reward: ", reward);
+            if (i == 0) {
+                break;
+            }
+            i--;
         }
         console.log("end _calculateReward(), final reward: ", reward);
         return reward;
