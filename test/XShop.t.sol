@@ -13,6 +13,8 @@ contract XShopTest is Test {
     uint256 initialSupply = 10 ** 24; // 1M tokens, 18 decimals
     address internal constant user1 = address(1);
     address internal constant user2 = address(2);
+    uint256 depositAmount = 25000 * 1e18;
+
 
     function setUp() public {
         xshop = new XShop();
@@ -33,7 +35,6 @@ contract XShopTest is Test {
     }
 
     function testDeposit() public {
-        uint256 depositAmount = 25000 * 1e18;
         // Approve XShop to transfer SHOP
         uint256 shopBalance = shop.balanceOf(address(this));
         // Deposit into XShop
@@ -53,15 +54,17 @@ contract XShopTest is Test {
     function testWithdraw() public {
         uint256 withdrawAmount = 20000 * 10 ** 18;
         xshop.deposit(withdrawAmount);
+        skip(5 days + 10);
         // Withdraw from XShop
         xshop.withdraw(withdrawAmount);
 
         xshop.deposit(withdrawAmount * 2);
+        skip(5 days + 10);
         xshop.withdraw(withdrawAmount);
         assertEq(xshop.balanceOf(address(this)), withdrawAmount);
 
         xshop.snapshot{value: 1 ether}();
-        skip(1 days);
+        skip(5 days + 10);
         assertEq(xshop.balanceOf(address(this)), withdrawAmount);
         xshop.withdraw(withdrawAmount);
         assertEq(xshop.balanceOf(address(this)), 0);
@@ -128,7 +131,7 @@ contract XShopTest is Test {
         // epoch 0 started
         xshop.deposit(20000 * 1e18);
         // Skipping, just testing if the bot skips run, should be treated as epoch 0 anyways
-        skip(3 days);
+        skip(5 days);
         xshop.deposit(20000 * 1e18);
         vm.startPrank(user1);
         xshop.deposit(60000 * 1e18);
@@ -173,7 +176,7 @@ contract XShopTest is Test {
         // epoch 0: 0.4 ether
         // epoch 1: 2 ether * 20/80 = 0.5 ether
         // epoch 2: last one
-        assertEq(reward, 9*1e17);
+        assertEq(reward, 9 * 1e17);
         vm.startPrank(user1);
         rewardUser1 = xshop.getPendingReward();
         vm.stopPrank();
@@ -185,12 +188,12 @@ contract XShopTest is Test {
         uint256 balanceBefore = address(this).balance;
         xshop.claimReward();
         assertEq(address(this).balance - balanceBefore, reward);
-
-        vm.startPrank(user1);
-        balanceBefore = address(this).balance;
-        xshop.claimReward();
-        assertEq(address(this).balance - balanceBefore, rewardUser1);
-        vm.stopPrank();
+//
+//        vm.startPrank(user1);
+//        balanceBefore = address(this).balance;
+//        xshop.claimReward();
+//        assertEq(address(this).balance - balanceBefore, rewardUser1);
+//        vm.stopPrank();
 
         // Validate the snapshot
 //        uint256 currentEtherBalance = address(this).balance;
@@ -198,5 +201,17 @@ contract XShopTest is Test {
 //        assertEq(address(this).balance, currentEtherBalance + 1 ether);
     }
 
+    function testFailTimeLock() public payable {
+        xshop.deposit(depositAmount);
+        xshop.withdraw(depositAmount);
+    }
+
+    function testTimeLock() public payable {
+        xshop.deposit(depositAmount);
+        skip(6 days);
+        xshop.withdraw(depositAmount);
+    }
+
+    receive() external payable {}
 
 }

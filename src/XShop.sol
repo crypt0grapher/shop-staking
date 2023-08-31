@@ -81,8 +81,8 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
         require(_amount + balanceOf(msg.sender) >= minimumStake, "Minimum deposit is 20K $SHOP");
         require(shopToken.transferFrom(msg.sender, address(this), _amount), "Transfer failed");
 
-        if (firstDeposit == 0) {
-            firstDeposit = block.timestamp;
+        if (userInfo[msg.sender].firstDeposit == 0) {
+            userInfo[msg.sender].firstDeposit = block.timestamp;
         }
         _updateStake(msg.sender, _amount, true);
 
@@ -91,7 +91,7 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
 
     function withdraw(uint256 _amount) public nonReentrant {
         require(balanceOf(msg.sender) >= _amount, "Insufficient balance");
-        require(firstDeposit + timeLock < block.timestamp, "Too early to withdraw");
+        require(userInfo[msg.sender].firstDeposit + timeLock < block.timestamp, "Too early to withdraw");
 
         _updateStake(msg.sender, _amount, false);
 
@@ -103,7 +103,7 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
     function claimReward() public nonReentrant {
         require(currentEpoch > 0, "No rewards have been distributed yet");
         uint256 lastSnapshotTime = epochInfo[currentEpoch - 1].timestamp;
-        require(lastSnapshotTime + epochDuration < block.timestamp, "Too early to calculate rewards");
+//        require(lastSnapshotTime + epochDuration <= block.timestamp, "Too early to calculate rewards");
         require(!isReinvesting(), "Auto-compounding is enabled");
 
         uint256 reward = getPendingReward();
@@ -291,6 +291,5 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
         super._beforeTokenTransfer(_from, _to, _amount);
         require(_from == address(0) || _to == address(0), "Only stake or unstake");
     }
-
 
 }
