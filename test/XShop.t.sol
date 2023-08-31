@@ -152,33 +152,36 @@ contract XShopTest is Test {
         reward = xshop.getPendingReward();
         // User
         // 20K withdrawn, the reward is calculated from previous epochs, the reward is:
-        // epoch 1:  2 ether * 40K / 100K (balances of epoch 0) = 0.8 ether
-        // epoch 0:  0, since deposited in the epoch
-        assertEq(reward, 80 * 1e16);
+        // epoch 0:  1 ether * 40K / 100K (balances of epoch 0) = 0.4 ether
+        // epoch 1:  last one
+        assertEq(reward, 40 * 1e16);
         vm.startPrank(user1);
         uint256 rewardUser1 = xshop.getPendingReward();
         vm.stopPrank();
         // User1
         // The reward is:
-        // epoch 1:  2 ether * 60 / 100 = 1.5 ether
-        // epoch 0:  0, since deposited in the epoch
-        assertEq(rewardUser1, 12 * 1e17);
+        // epoch 0:  1 ether * 60 / 100 = 0.6 ether
+        // epoch 1:  last one
+        assertEq(rewardUser1, 60 * 1e16);
         skip(1 days);
         xshop.withdraw(20000 * 1e18);
         xshop.snapshot{value: 10 ether}();
 
-//        // epoch 3 started
-//        reward = xshop.getPendingReward();
-//        // User has no balance, on rewards so far
-//        assertEq(reward, 0);
-//        vm.startPrank(user1);
-//        rewardUser1 = xshop.getPendingReward();
-//        vm.stopPrank();
-//        // User1 has 60K, so the reward is:
-//        // epoch 2:  10 ether * 60 / 60 = 10 ether
-//        // epoch 1:  2 ether * 60 / 60 = 2 ether
-//        assertEq(rewardUser1, 1 ether * 12);
-//        skip(1 days);
+        // epoch 3 started
+        reward = xshop.getPendingReward();
+        // epoch 0: 0.4 ether
+        // epoch 1: 2 ether * 20/80 = 0.5 ether
+        // epoch 2: last one
+        assertEq(reward, 9*1e17);
+        vm.startPrank(user1);
+        rewardUser1 = xshop.getPendingReward();
+        vm.stopPrank();
+        // User1 has 60K, so the reward is:
+        // epoch 0: 0.6 ether
+        // epoch 1: 2 ether * 60/80 = 1.5 ether
+        // epoch 2: last one
+
+        assertEq(rewardUser1, 21 * 1e17);
 
         // Validate the snapshot
 //        uint256 currentEtherBalance = address(this).balance;
