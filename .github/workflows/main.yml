@@ -8,6 +8,10 @@ env:
 jobs:
   check:
     strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable, beta, nightly]
+        fail-fast: [true, false]
       fail-fast: true
 
     name: Foundry project
