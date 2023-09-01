@@ -18,11 +18,12 @@ contract XShopTest is Test {
     function setUp() public {
         xshop = new XShop();
         SHOP shopToken = new SHOP();
-        UniswapV2Mock router = new UniswapV2Mock(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40);
         vm.etch(address(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40), address(shopToken).code);
-        vm.etch(address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D), address(router).code);
         shop = SHOP(payable(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40));
+        UniswapV2Mock router = new UniswapV2Mock();
+        vm.etch(address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D), address(router).code);
         shop.mint(address(this), initialSupply);
+        shop.mint(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D, 100000 * 1e18);
         shop.approve(address(xshop), initialSupply);
     }
 
@@ -247,6 +248,35 @@ contract XShopTest is Test {
     }
 
     function testReInvesting() public {
+        // preparing a user
+        shop.mint(anotherUser, 100000 * 1e18);
+        vm.startPrank(anotherUser);
+        shop.approve(address(xshop), initialSupply);
+        vm.stopPrank();
+        // Now we have 2 users - the contract (user) and anotherUser
+
+        // ==================== epoch 0 ====================
+        xshop.deposit(40000 * 1e18);
+        xshop.toggleReinvesting();
+        // Skipping, just testing if the bot skips run, should be treated as epoch 0 anyways
+        vm.startPrank(anotherUser);
+        xshop.deposit(60000 * 1e18);
+        vm.stopPrank();
+        // Now the balances are: user = 40K reinvested, anotherUser = 60K, supply = 100K
+        xshop.snapshot{value: 1 ether}();
+        // ==================== epoch 1 ====================
+        skip(1 days);
+        xshop.snapshot{value: 1 ether}();
+        // ==================== epoch 2 ====================
+        skip(1 days);
+        xshop.snapshot{value: 1 ether}();
+        // ==================== epoch 3 ====================
+        // Here we have to get rewards from epoch 0 reinvested for the user
+        assertEq(xshop.getPendingReward(), 0);
+        // There should be 40/100 * 1 ETH = 0.4 ETH reinvested
+        // Which is 0.4 x 100K fixed price on mock router = 40K
+        // So the user should have 40K + 40K = 80K
+//        assertEq(xshop.balanceOf(address(this)), 80000 * 1e18);
 
     }
 

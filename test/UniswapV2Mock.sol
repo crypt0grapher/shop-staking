@@ -15,17 +15,7 @@ interface IERC20Mock {
 }
 
 contract UniswapV2Mock {
-    // Assume that 1 ETH is equivalent to 1000 Mock Tokens as the predefined price
-    uint256 public rate = 1000;
-
-    IERC20Mock public token;
-
     event Swapped(address indexed user, uint256 ethAmount, uint256 tokenAmount);
-
-    constructor(address _tokenAddress) {
-        token = IERC20Mock(_tokenAddress);
-    }
-
     // Fallback function to allow receiving ETH
     receive() external payable {}
 
@@ -41,13 +31,14 @@ contract UniswapV2Mock {
     returns (uint256[] memory amounts)
     {
         require(path[0] == address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE), "UniswapV2Mock: Invalid path");
-        require(path[path.length - 1] == address(token), "UniswapV2Mock: Invalid last token");
+        require(path[path.length - 1] == address(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40), "UniswapV2Mock: Invalid last token");
         require(block.timestamp <= deadline, "UniswapV2Mock: Deadline exceeded");
         require(msg.value > 0, "UniswapV2Mock: Invalid msg.value");
 
-        uint256 tokenAmount = msg.value * rate;
+        //predefined 100K shop for 1 eth
+        uint256 tokenAmount = msg.value * 100000;
         require(tokenAmount >= amountOutMin, "UniswapV2Mock: Slippage not acceptable");
-
+        IERC20Mock token = IERC20Mock(0x99e186E8671DB8B10d45B7A1C430952a9FBE0D40);
         // Simulate token transfer
         require(token.transfer(to, tokenAmount), "UniswapV2Mock: Transfer failed");
 
@@ -60,8 +51,7 @@ contract UniswapV2Mock {
         return amounts;
     }
 
-    // To refill the mock contract's token balance
-    function mintTokens(uint256 amount) external {
-        token.mint(address(this), amount);
+    function WETH() external pure returns (address) {
+        return address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
     }
 }
