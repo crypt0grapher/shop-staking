@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
-//import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
-import "lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
-import "lib/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "./IXShop.sol";
 
 /// @title Shop Bot Staking Contract
@@ -50,8 +49,7 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
         mapping(uint256 => uint256) withdrawnInEpoch;
         mapping(uint256 => bool) isReinvestingOnForEpoch;
         // a starting epoch for reward calculation for user - either last claimed or first deposit
-        uint256 lastClaimedEpoch;
-        uint256 lastEpochReinvested;
+        uint256 lastEpochClaimedOrReinvested;
         uint256 firstDeposit;
     }
 
@@ -109,7 +107,7 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
         require(reward > 0, "No reward available");
         require(address(this).balance >= reward, "Insufficient contract balance to transfer reward");
         payable(msg.sender).transfer(reward);
-        userInfo[msg.sender].lastClaimedEpoch = currentEpoch - 1;
+        userInfo[msg.sender].lastEpochClaimedOrReinvested = currentEpoch - 1;
         emit Claimed(msg.sender, reward);
     }
 
@@ -122,23 +120,39 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
             require(block.timestamp >= lastSnapshotTime + epochDuration - 5 minutes, "Too early for a new snapshot");
         }
         totalRewards += msg.value;
-
+        console.log("snapshot");
+        console.log("currentEpoch", currentEpoch);
+        console.log("totalRewards", totalRewards);
         epochInfo[currentEpoch].rewards = msg.value;
         epochInfo[currentEpoch].timestamp = block.timestamp;
         epochInfo[currentEpoch].supply = totalSupply();
         // swap ETH for autocompounding
+        console.log("swap ETH for autocompounding");
 
         uint256 ethToSell = 0;
+        uint256[] memory stakersRewarsInEpoch = new uint256[](reInvestorsCount + 1);
         for (uint256 i = 1; i <= reInvestorsCount; i++) {
-            ethToSell += _calculateReward(reInvestors[i], userInfo[(reInvestors[i])].lastEpochReinvested, true);
+            address user = reInvestors[i];
+            userInfo[user].isReinvestingOnForEpoch[currentEpoch] = true;
+            console.log("reInvestors[i]", user);
+            stakersRewarsInEpoch[i] = _calculateReward(user, true);
+            ethToSell += stakersRewarsInEpoch[i];
             if (ethToSell > 0) {
-                userInfo[reInvestors[i]].lastEpochReinvested = currentEpoch;
+                userInfo[user].lastEpochClaimedOrReinvested = currentEpoch;
             }
         }
         uint256 xShopToMintTotal = 0;
+        console.log("ethToSell", ethToSell);
         if (ethToSell > 0) {
             xShopToMintTotal = _swapEthForShop(ethToSell);
             epochInfo[currentEpoch].shop = xShopToMintTotal;
+            console.log("epochInfo[currentEpoch].shop", xShopToMintTotal);
+            //now updating staking balances
+            for (uint256 i = 1; i <= reInvestorsCount; i++) {
+                console.log("stakersRewarsInEpoch[i]", stakersRewarsInEpoch[i]);
+                uint256 xShopToMint = stakersRewarsInEpoch[i] * xShopToMintTotal / ethToSell;
+                _updateStake(msg.sender, xShopToMint, true);
+            }
         }
         emit Snapshot(currentEpoch, msg.value, msg.sender);
         currentEpoch++;
@@ -192,7 +206,7 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
     }
 
     function calculateRewardForUser(address user) public view returns (uint256) {
-        return _calculateReward(user, userInfo[user].lastClaimedEpoch, false);
+        return _calculateReward(user, false);
     }
 
     function isReinvesting() public view returns (bool) {
@@ -235,24 +249,28 @@ contract XShop is IXShop, ERC20("Staked Shop Bot", "xSHOP"), Ownable, Reentrancy
     }
 
 // Mock function for demonstration purposes. In reality, you'd interact with a decentralized exchange contract here.
-    function _calculateReward(address _user, uint256 _lastEpoch, bool _isForReinvestment) internal view returns (uint256) {
+    function _calculateReward(address _user, bool _isForReinvestment) internal view returns (uint256) {
+        console.log("_calculateReward ======, _user %s, _lastEpoch %s, _isForReinvestment %s", _user, userInfo[_user].lastEpochClaimedOrReinvested, _isForReinvestment);
         uint256 reward = 0;
         if (currentEpoch < 1) {
             return 0;
         }
         uint256 userBalanceInEpoch = balanceOf(_user);
         uint256 i = currentEpoch;
-        while (i >= _lastEpoch && i <= currentEpoch) {
+        while (i >= userInfo[_user].lastEpochClaimedOrReinvested && i <= currentEpoch) {
             uint256 supplyInEpoch = epochInfo[i].supply;
             uint256 epochReward = supplyInEpoch == 0 || i >= currentEpoch - 1 ? 0 :
                 userBalanceInEpoch * epochInfo[i].rewards / supplyInEpoch;
-            if (epochReward > 0) {
-                if (_isForReinvestment && reInvestorsIndex[_user] > 0) {
-                    reward += epochReward;
-                } else if (!_isForReinvestment && reInvestorsIndex[_user] == 0) {
-                    reward += epochReward;
-                }
-            }
+            console.log("_user %s, epoch %s, epochReward %s = ", _user, i, epochReward);
+            console.log(" = userbalance(%s) * rewards (%s) / supply(%s) ", userBalanceInEpoch, epochInfo[i].rewards, supplyInEpoch);
+            if (epochReward > 0 &&
+                (_isForReinvestment && reInvestorsIndex[_user] > 0 ||
+                    !_isForReinvestment && !userInfo[_user].isReinvestingOnForEpoch[i])) {
+                reward += epochReward;
+                console.log("adding to reward", reward);
+            } else
+                console.log("skipping epoch %s, reinvestor: %s ", i, userInfo[_user].isReinvestingOnForEpoch[i]);
+            console.log("_user %s, epoch %s, epochReward %s", _user, i, epochReward);
             if (i == 0) {
                 break;
             }

@@ -276,8 +276,37 @@ contract XShopTest is Test {
         // There should be 40/100 * 1 ETH = 0.4 ETH reinvested
         // Which is 0.4 x 100K fixed price on mock router = 40K
         // So the user should have 40K + 40K = 80K
-//        assertEq(xshop.balanceOf(address(this)), 80000 * 1e18);
-
+        assertEq(xshop.balanceOf(address(this)), 80000 * 1e18);
+        vm.startPrank(anotherUser);
+        // anotherUser should have 60K / 100K * 1 ETH x 2 = 1.2 ETH
+        assertEq(xshop.getPendingReward(), 1200000000000000000);
+        vm.stopPrank();
+        // turning off reinvesting
+        xshop.toggleReinvesting();
+        skip(1 days);
+        xshop.snapshot{value: 1 ether}();
+        // ==================== epoch 4 ====================
+        skip(1 days);
+        xshop.snapshot{value: 1 ether}();
+        // ==================== epoch 5 ====================
+        // Rewards are the following:
+        //from epoch 3 : 80K/ (80K+60K) * 1 ETH = 0.5714285714285714 ETH
+        assertEq(xshop.getPendingReward(), 571428571428571428);
+        assertEq(xshop.balanceOf(address(this)), 80000 * 1e18);
+        skip(1 days);
+        xshop.snapshot{value: 1 ether}();
+        // ==================== epoch 6 ====================
+        assertEq(xshop.getPendingReward(), 1142857142857142856);
+        xshop.claimReward();
+        assertEq(xshop.balanceOf(address(this)), 80000 * 1e18);
+        skip(1 days);
+        xshop.snapshot{value: 1 ether}();
+        // ==================== epoch 7 ====================
+        assertEq(xshop.getPendingReward(), 571428571428571428);
+        skip(1 days);
+        xshop.snapshot{value: 1 ether}();
+        // ==================== epoch 8 ====================
+        assertEq(xshop.getPendingReward(), 1142857142857142856);
     }
 
     function testFailTimeLock() public payable {
