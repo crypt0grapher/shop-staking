@@ -11,8 +11,7 @@ contract XShopTest is Test {
     XShop public xshop;
     SHOP public shop;
     uint256 initialSupply = 10 ** 24; // 1M tokens, 18 decimals
-    address internal constant user1 = address(1);
-    address internal constant user2 = address(2);
+    address internal constant anotherUser = address(71);
     uint256 depositAmount = 25000 * 1e18;
 
 
@@ -122,83 +121,133 @@ contract XShopTest is Test {
 
     function testClaim() public payable {
         // preparing a user
-        shop.mint(user1, 100000 * 1e18);
-        vm.startPrank(user1);
+        shop.mint(anotherUser, 100000 * 1e18);
+        vm.startPrank(anotherUser);
         shop.approve(address(xshop), initialSupply);
         vm.stopPrank();
-        // Now we have 2 users - the contract (user) and user1
+        // Now we have 2 users - the contract (user) and anotherUser
 
-        // epoch 0 started
+        // ==================== epoch 0 ====================
         xshop.deposit(20000 * 1e18);
         // Skipping, just testing if the bot skips run, should be treated as epoch 0 anyways
         skip(5 days);
         xshop.deposit(20000 * 1e18);
-        vm.startPrank(user1);
+        vm.startPrank(anotherUser);
         xshop.deposit(60000 * 1e18);
         vm.stopPrank();
-        // user = 40K, user1 = 60K, supply = 100K
+        // Now the balances are: user = 40K, anotherUser = 60K, supply = 100K
+        // Checking rewards:
         uint256 reward = xshop.getPendingReward();
         assertEq(reward, 0);
-        // should be no rewards
+        // Should be no rewards, since just started
+        // Distributing 1 ETH as rewards
         xshop.snapshot{value: 1 ether}();
+        // Checking the balance of the contract
+        assertEq(address(xshop).balance, 1 ether);
 
-        // epoch 1 started
+        // ==================== epoch 1 ====================
         reward = xshop.getPendingReward();
         // too early, no rewards
         assertEq(reward, 0);
         skip(1 days);
-        // user = 20K, user1 = 60K, supply = 80K
+        // user = 20K, anotherUser = 60K, supply = 80K
         xshop.withdraw(20000 * 1e18);
-        xshop.snapshot{value: 2 ether}();
+        //0.2 ether
+        xshop.snapshot{value: 2 * 1e17}();
+        //should be 1.2ETh now
+        assertEq(address(xshop).balance, 12 * 1e17);
 
         // epoch 2 started
         reward = xshop.getPendingReward();
         // User
-        // 20K withdrawn, the reward is calculated from previous epochs, the reward is:
+        // 20K withdrawn, the user has zero balance how,
+        // the reward is calculated from previous epochs, the reward is:
         // epoch 0:  1 ether * 40K / 100K (balances of epoch 0) = 0.4 ether
         // epoch 1:  last one
         assertEq(reward, 40 * 1e16);
-        vm.startPrank(user1);
-        uint256 rewardUser1 = xshop.getPendingReward();
+        vm.startPrank(anotherUser);
+        uint256 rewardanotherUser = xshop.getPendingReward();
         vm.stopPrank();
-        // User1
+        // anotherUser
         // The reward is:
         // epoch 0:  1 ether * 60 / 100 = 0.6 ether
         // epoch 1:  last one
-        assertEq(rewardUser1, 60 * 1e16);
+        assertEq(rewardanotherUser, 60 * 1e16);
         skip(1 days);
         xshop.withdraw(20000 * 1e18);
+        xshop.snapshot{value: 1 ether}();
+        skip(1 days);
+
+        // ==================== epoch 3 ====================
+        reward = xshop.getPendingReward();
+        // epoch 0: 0.4 ether
+        // epoch 1: 0.2 ether * 20/80 = 0.05 ether
+        // epoch 2: last one
+        assertEq(reward, 45 * 1e16);
+        vm.startPrank(anotherUser);
+        rewardanotherUser = xshop.getPendingReward();
+        vm.stopPrank();
+        // anotherUser has 60K, so the reward is:
+        // epoch 0: 0.6 ether
+        // epoch 1: 0.2 ether * 60/80 = 0.15 ether
+        // epoch 2: last one
+        assertEq(rewardanotherUser, 75 * 1e16);
+        uint256 balanceBefore = address(this).balance;
+        skip(1 days);
+        rewardanotherUser = xshop.getPendingReward();
+        xshop.claimReward();
+        assertEq(address(this).balance - balanceBefore, reward);
+        vm.startPrank(anotherUser);
+        rewardanotherUser = xshop.getPendingReward();
+        balanceBefore = address(anotherUser).balance;
+        uint256 rewardAnotherUser = xshop.getPendingReward();
+        xshop.claimReward();
+        assertEq(address(anotherUser).balance - balanceBefore, rewardAnotherUser);
+        // now rewards should be 0
+        rewardAnotherUser = xshop.getPendingReward();
+        assertEq(rewardAnotherUser, 0);
+        vm.stopPrank();
+        // now rewards should be 0
+        reward = xshop.getPendingReward();
+        assertEq(reward, 0);
         xshop.snapshot{value: 10 ether}();
         skip(1 days);
 
-        // epoch 3 started
+        // ==================== epoch 4 ====================
+        xshop.deposit(20000 * 1e18);
         reward = xshop.getPendingReward();
-        // epoch 0: 0.4 ether
-        // epoch 1: 2 ether * 20/80 = 0.5 ether
-        // epoch 2: last one
-        assertEq(reward, 9 * 1e17);
-        vm.startPrank(user1);
-        rewardUser1 = xshop.getPendingReward();
-        vm.stopPrank();
-        // User1 has 60K, so the reward is:
-        // epoch 0: 0.6 ether
-        // epoch 1: 2 ether * 60/80 = 1.5 ether
-        // epoch 2: last one
-        assertEq(rewardUser1, 21 * 1e17);
-        uint256 balanceBefore = address(this).balance;
+        assertEq(reward, 0);
+        // epoch 0-1: claimed
+        // epoch 2: the only user gets it all, 1 ether
+        // epoch 3: last one
+        vm.startPrank(anotherUser);
+        balanceBefore = address(anotherUser).balance;
         xshop.claimReward();
-        assertEq(address(this).balance - balanceBefore, reward);
-//
-//        vm.startPrank(user1);
-//        balanceBefore = address(this).balance;
-//        xshop.claimReward();
-//        assertEq(address(this).balance - balanceBefore, rewardUser1);
-//        vm.stopPrank();
+        assertEq(address(anotherUser).balance - balanceBefore, 1 ether);
+        // now rewards should be 0
+        vm.stopPrank();
+        // anotherUser gets it in 6
+        xshop.snapshot{value: 1 ether}();
+        skip(1 days);
 
-        // Validate the snapshot
-//        uint256 currentEtherBalance = address(this).balance;
-//        xshop.claimReward();
-//        assertEq(address(this).balance, currentEtherBalance + 1 ether);
+        // ==================== epoch 5 ====================
+        xshop.snapshot{value: 1 ether}();
+        skip(1 days);
+
+        // ==================== epoch 6 ====================
+        balanceBefore = address(this).balance;
+        xshop.claimReward();
+        assertEq(address(this).balance - balanceBefore, 1 ether * 20 / 80);
+        //
+        vm.startPrank(anotherUser);
+        balanceBefore = address(anotherUser).balance;
+        xshop.claimReward();
+        assertEq(address(anotherUser).balance - balanceBefore, 10 ether + 1 ether * 60 / 80);
+        vm.stopPrank();
+    }
+
+    function testReInvesting() public {
+
     }
 
     function testFailTimeLock() public payable {
@@ -211,6 +260,7 @@ contract XShopTest is Test {
         skip(6 days);
         xshop.withdraw(depositAmount);
     }
+
 
     receive() external payable {}
 
