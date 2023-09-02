@@ -252,7 +252,7 @@ contract SHOP is ERC20("Shop Bot", "SHOP"), Ownable {
         tradingEnabled = true;
         providingLiquidity = true;
         genesis_block = block.number;
-        console.log("now, tradingEnabled: %s, providingLiquidity: %s", tradingEnabled, providingLiquidity);
+
     }
 
     function updatedeadline(uint256 _deadline) external onlyOwner {

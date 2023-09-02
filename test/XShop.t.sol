@@ -5,7 +5,6 @@ import "forge-std/Test.sol";
 import "../src/XShop.sol";
 import "./UniswapV2Mock.sol";
 import "./ShopMock.sol";
-import "forge-std/console.sol";
 
 contract XShopTest is Test {
     XShop public xshop;
